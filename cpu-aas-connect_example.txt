@@ -1,0 +1,5 @@
+# format as follows
+# username:password:service
+scott:tiger:orcl01
+scott:tiger:orcl02
+
