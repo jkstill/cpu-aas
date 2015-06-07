@@ -1,30 +1,35 @@
 with AASIO as (
-           select
-              class, sum(AAS) AAS, begin_time, end_time
-              from (
-                 select
-                 decode(n.wait_class,'User I/O','User I/O',
-                                     'Commit','Commit',
-                                     'Wait')                               CLASS,
-                 sum(round(m.time_waited/m.INTSIZE_CSEC,3))  AAS,
-                 -- normalize the begin/end times between instances
-                 -- not perfect but I think close enough for general trends
-                 -- should never be more than 2 minutes variance assuming 3+ instances
-                 -- 1 minute variance for 2 instances
-                 min(BEGIN_TIME) over (partition by decode(n.wait_class,'User I/O','User I/O', 'Commit','Commit', 'Wait')) begin_time ,
-                 min(END_TIME) over (partition by decode(n.wait_class,'User I/O','User I/O', 'Commit','Commit', 'Wait')) end_time
-           from  gv$waitclassmetric  m,
-                 gv$system_wait_class n
-           where m.wait_class_id=n.wait_class_id
-             and n.wait_class != 'Idle'
-                                 and n.inst_id = m.inst_id
-           group by  decode(n.wait_class,'User I/O','User I/O', 'Commit','Commit', 'Wait'), BEGIN_TIME, END_TIME
-           order by begin_time
-         )
-         group by class, begin_time, end_time
+	select class, sum(AAS) AAS, begin_time, end_time
+	from (
+		select
+			decode(n.wait_class
+				,'User I/O','User I/O',
+				'Commit','Commit',
+				'Wait'
+			) CLASS,
+			sum(round(m.time_waited/m.INTSIZE_CSEC,3))  AAS,
+			-- normalize the begin/end times between instances
+			-- not perfect but I think close enough for general trends
+			-- should never be more than 2 minutes variance assuming 3+ instances
+			-- 1 minute variance for 2 instances
+			min(BEGIN_TIME) over (partition by decode(n.wait_class,'User I/O','User I/O', 'Commit','Commit', 'Wait')) begin_time ,
+			min(END_TIME) over (partition by decode(n.wait_class,'User I/O','User I/O', 'Commit','Commit', 'Wait')) end_time
+			from  gv$waitclassmetric  m,
+				gv$system_wait_class n
+			where m.wait_class_id=n.wait_class_id
+				and n.wait_class != 'Idle'
+				and n.inst_id = m.inst_id
+			group by  decode(n.wait_class,'User I/O','User I/O', 'Commit','Commit', 'Wait'), BEGIN_TIME, END_TIME
+			order by begin_time
+	)
+	group by class, begin_time, end_time
 ),
 CORES as (
-   select cpu_core_count from dba_cpu_usage_statistics where timestamp= (select max(timestamp) from dba_cpu_usage_statistics)
+   --select cpu_core_count from dba_cpu_usage_statistics where timestamp= (select max(timestamp) from dba_cpu_usage_statistics)
+	-- use this for RAC
+	--select inst_id, cpu_count_current cpu_core_count from gv$license
+	-- use this one for now, then use RAC
+	select cpu_count_current cpu_core_count from v$license
 ),
 AASSTAT as (
              select class, aas, begin_time, end_time from aasio
@@ -56,7 +61,7 @@ AASSTAT as (
                and SAMPLE_TIME < (select max(END_TIME) end_time from gv$sysmetric where metric_name='CPU Usage Per Sec' and group_id=2 )
 )
 select
-		 sysdate timestamp,
+		 to_char(sysdate,'YYYY-MM-DD HH24:MI:SS') TIMESTAMP,
        to_char(BEGIN_TIME,'YYYY-MM-DD HH24:MI:SS') BEGIN_TIME,
        to_char(END_TIME,'YYYY-MM-DD HH24:MI:SS') END_TIME,
        cpu.cpu_core_count cores,
