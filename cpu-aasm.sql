@@ -34,23 +34,15 @@ CORES as (
 AASSTAT as (
 	select inst_id, class, aas, begin_time, end_time from aasio
 union
-	select cores.inst_id,
-		'CPU_OS'                                                CLASS ,
-		round((prcnt.busy*cores.cpu_core_count)/100,3)          AAS,
-		BEGIN_TIME ,
-		END_TIME
-	from
-		(
-			select inst_id,
-				sum(value) busy,
-				min(BEGIN_TIME)
-				begin_time,max(END_TIME) end_time
-			from gv$sysmetric
-			where metric_name='Host CPU Utilization (%)'
-				and group_id=2 group by inst_id
-		) prcnt,
-		cores
-	where cores.inst_id = prcnt.inst_id
+	select inst_id,
+		'CPU_ORA_CONSUMED'                                     CLASS,
+		round(sum(value)/100,3)                                     AAS,
+		min(BEGIN_TIME) begin_time,
+		max(END_TIME) end_time
+	from gv$sysmetric
+	where metric_name='CPU Usage Per Sec'
+		and group_id=2
+	group by inst_id,metric_name
 union
 	select prcnt.inst_id,
 		'CPU_OS'                                                CLASS ,
@@ -101,15 +93,15 @@ select
        WAIT
 from (
 	select
-		 inst_id,
-       min(BEGIN_TIME) BEGIN_TIME,
-       max(END_TIME) END_TIME,
-       sum(decode(CLASS,'CPU_ORA_CONSUMED',AAS,0)) CPU_ORA_CONSUMED,
-       sum(decode(CLASS,'CPU_ORA_DEMAND'  ,AAS,0)) CPU_ORA_DEMAND,
-       sum(decode(CLASS,'CPU_OS'          ,AAS,0)) CPU_OS,
-       sum(decode(CLASS,'Commit'          ,AAS,0)) COMMIT,
-       sum(decode(CLASS,'User I/O'        ,AAS,0)) READIO,
-       sum(decode(CLASS,'Wait'            ,AAS,0)) WAIT
+		inst_id,
+		min(BEGIN_TIME) BEGIN_TIME,
+		max(END_TIME) END_TIME,
+		sum(decode(CLASS,'CPU_ORA_CONSUMED',AAS,0)) CPU_ORA_CONSUMED,
+		sum(decode(CLASS,'CPU_ORA_DEMAND'  ,AAS,0)) CPU_ORA_DEMAND,
+		sum(decode(CLASS,'CPU_OS'          ,AAS,0)) CPU_OS,
+		sum(decode(CLASS,'Commit'          ,AAS,0)) COMMIT,
+		sum(decode(CLASS,'User I/O'        ,AAS,0)) READIO,
+		sum(decode(CLASS,'Wait'            ,AAS,0)) WAIT
 	from AASSTAT
 	group by inst_id
 ) stats
