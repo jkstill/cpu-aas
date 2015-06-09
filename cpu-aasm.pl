@@ -184,11 +184,7 @@ $sql=q{with AASIO as (
 	group by inst_id, class, begin_time, end_time
 ),
 CORES as (
-   --select cpu_core_count from dba_cpu_usage_statistics where timestamp= (select max(timestamp) from dba_cpu_usage_statistics)
-	-- use this for RAC
 	select inst_id, cpu_count_current cpu_core_count from gv$license
-	-- use this one for now, then use RAC
-	--select cpu_count_current cpu_core_count from v$license
 ),
 AASSTAT as (
 	select inst_id, class, aas, begin_time, end_time from aasio
@@ -219,7 +215,6 @@ union
 				and group_id=2
 			group by inst_id
 		) prcnt,
-		--( select inst_id, sum(value) cpu_count from gv$parameter where name='cpu_count' group by inst_id )  parameter
 		cores
 		where cores.inst_id = prcnt.inst_id
 union
