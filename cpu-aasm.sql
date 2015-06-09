@@ -1,3 +1,4 @@
+
 with AASIO as (
 	select inst_id, class, sum(AAS) AAS, begin_time, end_time
 	from (
@@ -50,15 +51,15 @@ union
 		BEGIN_TIME ,
 		END_TIME
 	from
-		( 
-			select inst_id, 
-				sum(value) busy, 
+		(
+			select inst_id,
+				sum(value) busy,
 				min(BEGIN_TIME) begin_time,
-				max(END_TIME) end_time 
-			from gv$sysmetric 
-			where metric_name='Host CPU Utilization (%)' 
-				and group_id=2 
-			group by inst_id 
+				max(END_TIME) end_time
+			from gv$sysmetric
+			where metric_name='Host CPU Utilization (%)'
+				and group_id=2
+			group by inst_id
 		) prcnt,
 		--( select inst_id, sum(value) cpu_count from gv$parameter where name='cpu_count' group by inst_id )  parameter
 		cores
@@ -75,14 +76,16 @@ union
 	group by ash.inst_id
 )
 select
-		 stats.inst_id,
 		 to_char(sysdate,'YYYY-MM-DD HH24:MI:SS') TIMESTAMP,
+		 d.name database,
+		 i.host_name,
+		 stats.inst_id,
        to_char(BEGIN_TIME,'YYYY-MM-DD HH24:MI:SS') BEGIN_TIME,
        to_char(END_TIME,'YYYY-MM-DD HH24:MI:SS') END_TIME,
        cpu.cpu_core_count cores,
-       ( 
+       (
 		 	decode(sign(CPU_OS-CPU_ORA_CONSUMED), -1, 0, (CPU_OS - CPU_ORA_CONSUMED ))
-			+ CPU_ORA_CONSUMED 
+			+ CPU_ORA_CONSUMED
 			+ decode(sign(CPU_ORA_DEMAND-CPU_ORA_CONSUMED), -1, 0, (CPU_ORA_DEMAND - CPU_ORA_CONSUMED ))
 		 ) CPU_TOTAL,
        decode(sign(CPU_OS-CPU_ORA_CONSUMED), -1, 0, (CPU_OS - CPU_ORA_CONSUMED )) CPU_OS,
@@ -106,5 +109,11 @@ from (
 	group by inst_id
 ) stats
 	, cores cpu
+	, gv$instance i
+	, gv$database d
 where cpu.inst_id = stats.inst_id
+and i.inst_id = stats.inst_id
+and d.inst_id = stats.inst_id
 /
+
+

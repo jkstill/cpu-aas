@@ -8,8 +8,31 @@ use warnings;
 use FileHandle;
 use DBI;
 use strict;
+use Getopt::Long;
+use Pod::Usage;
 
 my $debug=0;
+my ($man,$help);
+my %optctl=();
+
+GetOptions(\%optctl,
+	"interval=i",
+	"iterations=i",
+	"delimiter=s",
+	"sysdba!",
+	'debug!' => \$debug,
+	'help|?' => \$help, man => \$man
+) or pod2usage(2) ;
+
+pod2usage(1) if $help;
+pod2usage(-verbose => 2) if $man;
+
+my $interval = defined($optctl{interval}) ? $optctl{interval} : 67;
+my $iterations = defined($optctl{iterations}) ? $optctl{iterations} : 5;
+my $delimiter = defined($optctl{delimiter}) ? $optctl{delimiter} : ',';
+
+my $connectionMode = 0;
+if ( $optctl{sysdba} ) { $connectionMode = 2 }
 
 # this script will connect to an arbitrary number of databases
 # look for connections file
@@ -19,24 +42,11 @@ my $debug=0;
 
 my $connectionsFileName='cpu-aas-connect.txt';
 
-my @connectionsFileLocations = (
-	"$connectionsFileName"
-	,"$ENV{HOME}/$connectionsFileName"
-);
-
-if ($ARGV[0]) { unshift(@connectionsFileLocations,$ARGV[0]) }
-
-#print Dumper(\@connectionsFileLocations);
-#exit;
-
-# open the first file found from the list
-
-foreach my $f (@connectionsFileLocations) {
-	if (-r $f) {
-		print "Using connections file: $f\n" if $debug;
-		open CONN,'<',$f;
-		last;
-	}
+if (-r $connectionsFileName) {
+	print "Using connections file: $connectionsFileName\n" if $debug;
+	open CONN,'<',$connectionsFileName;
+} else {
+	die "No connections file found\n";
 }
 
 my @connections=<CONN>;
@@ -65,7 +75,7 @@ foreach my $connectInfo (@connections) {
    	{
       	RaiseError => 1,
       	AutoCommit => 0,
-      	ora_session_mode => 0 # 0=normal 1=sysoper 2=sysdba
+      	ora_session_mode => $connectionMode # 0=normal 1=sysoper 2=sysdba
    	}
    	);
 
@@ -83,21 +93,19 @@ foreach my $service ( keys %dbh ) {
 	$sth{$service} = $dbh{$service}->prepare($sql,{ora_check_sql => 0});
 }
 
-print "TIMESTAMP,DATABASE,INSTANCE,BEGIN_TIME,END_TIME,CORES,CPU_TOTAL,CPU_OS,CPU_ORA,CPU_ORA_WAIT,COMMIT,READIO,WAIT\n";
+print join($delimiter,qw(TIMESTAMP DATABASE HOST_NAME INSTANCE BEGIN_TIME END_TIME CORES CPU_TOTAL CPU_OS CPU_ORA CPU_ORA_WAIT COMMIT READIO WAIT)),"\n";
 
 # do not buffer output
 $|=1;
 
 # run for ~8 days
-
-my $interval=67;
-my $iterations=10300;
-$interval=3;
-$iterations=3;
+#my $interval=67;
+#my $iterations=10300;
 
 my @pFormat=(
 	'%s', # timestamp
 	'%s', # database
+	'%s', # host_name
 	'%i', # instance
 	'%s', # begin_time
 	'%s', # end_time
@@ -111,27 +119,31 @@ my @pFormat=(
 	'%.3f' # Wait
 );
 
-my $pFormat = join(',',@pFormat);
-
+my $pFormat = join($delimiter,@pFormat);
 
 for (my $i=0;$i < $iterations; $i++) {
 	# use sysdate from first service for all for each pass
 	my ($timestamp)=('','');
-	my $instanceID = undef;
 
 	foreach my $service ( keys %dbh ) {
    	$sth{$service}->execute;
+		# if using the '@ary = @{$something}' form in the loop
+		# there is always an undef on the last iteration
+		# dunno if bug in DBI/DBD/Perl, whatever
+		# stuffing the contents of the array ref in to a private array
+		# as a workaround for shift to work.
+
    	#while ( my @ary = @{$sth{$service}->fetchrow_arrayref} ) {
    	while ( my $ary = $sth{$service}->fetchrow_arrayref ) {
 			my @ary = @{$ary};
-			$instanceID = shift @ary;
+			#print "Array: ", join(',',@ary),"\n";
 			if ($timestamp) {
 				shift @ary; # throw away first element if timestamp already captured
 			} else {
 				$timestamp = shift @ary;
 			}
    		#print "$timestamp,$service,$instanceID,", join(',',@ary),"\n";
-   		printf "$pFormat\n", $timestamp,$service,$instanceID, @ary;
+   		printf "$pFormat\n", $timestamp, @ary;
 		}
 	}
    sleep $interval;
@@ -222,8 +234,10 @@ union
 	group by ash.inst_id
 )
 select
-		 stats.inst_id,
 		 to_char(sysdate,'YYYY-MM-DD HH24:MI:SS') TIMESTAMP,
+		 d.name database,
+		 i.host_name,
+		 stats.inst_id,
        to_char(BEGIN_TIME,'YYYY-MM-DD HH24:MI:SS') BEGIN_TIME,
        to_char(END_TIME,'YYYY-MM-DD HH24:MI:SS') END_TIME,
        cpu.cpu_core_count cores,
@@ -253,6 +267,85 @@ from (
 	group by inst_id
 ) stats
 	, cores cpu
+	, gv$instance i
+	, gv$database d
 where cpu.inst_id = stats.inst_id
+and i.inst_id = stats.inst_id
+and d.inst_id = stats.inst_id
 };
 };
+
+
+__END__
+
+=head1 NAME
+
+cpu-aasm.pl
+
+--help brief help message
+--man  full documentation
+--interval seconds between snapshots - default is 0
+--sysdba - connect as sysdba
+--iterations number of snapshots - default is 5
+--delimiter output field delimiter - default is ,
+
+=head1 SYNOPSIS
+
+sample [options] [file ...]
+
+ Options:
+   --help brief help message
+   --man  full documentation
+   --sysdba connect as sysdba if this option is used
+   --interval seconds between snapshots - default is 0
+   --iterations number of snapshots - default is 5
+   --delimiter output field delimiter - default is ,
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<--help>
+
+Print a brief help message and exits.
+
+=item B<--man>
+
+Prints the manual page and exits.
+
+=item B<--interval>
+
+The integer number of seconds between each snapshot of ASM storage metrics
+
+=item B<--iterations>
+
+The integer number of the number of snapshots of ASM storage metrics
+
+=item B<--delimiter>
+
+The character used as a delimiter between output fields for the CSV output.
+
+=back 
+
+=head1 DESCRIPTION
+
+B<cpu-aasm.pl> will connect as SYSDBA to the currently set ORACLE_SID.
+
+Collects CPU Metrics from an Oracle perspective.
+
+Database connections are defined in ./cpu-aas-connect.txt
+ username:password:connect_string
+
+Output is to STDOUT, so it will be necessary to redirect to a file if results are to be saved.
+
+This script inspired by http://datavirtualizer.com/oracle-cpu-time/
+
+
+=head1 EXAMPLE
+
+20 snapshots at 10 second intervals
+
+  cpu-aasm.pl  -interval 10 -iterations 20 -delimiter ,
+
+=cut
+
