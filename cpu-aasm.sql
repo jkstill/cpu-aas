@@ -76,7 +76,7 @@ union
 	group by ash.inst_id
 )
 select
-		 to_char(sysdate,'YYYY-MM-DD HH24:MI:SS') TIMESTAMP,
+		 to_char(systimestamp,'YYYY-MM-DD HH24:MI:SS.FF') TIMESTAMP,
 		 d.name database,
 		 i.host_name,
 		 stats.inst_id,
