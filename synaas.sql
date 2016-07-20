@@ -6,6 +6,7 @@
 
 set linesize 200 trimspool on
 set pagesize 60
+set verify off
 
 col sample_time format a35
 col begin_interval_time format a35
