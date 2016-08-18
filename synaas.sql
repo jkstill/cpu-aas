@@ -12,7 +12,7 @@ col sample_time format a35
 col begin_interval_time format a35
 col end_interval_time format a35
 
-define CSVOUT=''
+define CSVOUT='--' -- change to '--' for standard output
 
 col u_pagesize new_value u_pagesize noprint
 col u_feedstate new_value u_feedstate noprint
