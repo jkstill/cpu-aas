@@ -310,11 +310,11 @@ Prints the manual page and exits.
 
 =item B<--interval>
 
-The integer number of seconds between each snapshot of ASM storage metrics
+The integer number of seconds between each snapshot of CPU AAS metrics
 
 =item B<--iterations>
 
-The integer number of the number of snapshots of ASM storage metrics
+The integer number of the number of snapshots of CPU AAS metrics
 
 =item B<--delimiter>
 
