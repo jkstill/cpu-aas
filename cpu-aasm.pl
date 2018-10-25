@@ -1,5 +1,4 @@
-#!/usr/local/bin/perl
-#!/u01/app/oracle/product/11.2.0/oms/perl/bin/perl
+#!/usr/bin/env perl
 
 # see http://datavirtualizer.com/oracle-cpu-time/
 
